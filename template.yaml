@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  sqs-lambda-test
+
+  Sample SAM Template for s3-lambda-sample
+  
+Globals:
+  Function:
+    Timeout: 3
+    Tracing: Active
+  Api:
+    TracingEnabled: True
+
+Resources:
+  FunctionA:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3-presigner/
+      Handler: app.lambdaHandler
+      Runtime: nodejs18.x
+      Architectures:
+        - x86_64
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName:
+              !Ref S3Bucket
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref S3Bucket
+          S3_KEY: template.yaml
+      Events:
+        MyGetEvent:
+          Type: Api
+          Properties:
+            Path: /req/str
+            Method: GET
+            RequestParameters:
+#              - method.request.path.str:
+#                  Required: true
+              - method.request.querystring.pathToObj:
+                  Required: true
+                  Caching: false
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
