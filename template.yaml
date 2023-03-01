@@ -1,19 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
-Description: >
-  sqs-lambda-test
+Transform: 'AWS::Serverless-2016-10-31'
 
-  Sample SAM Template for s3-lambda-sample
-  
 Globals:
   Function:
     Timeout: 3
     Tracing: Active
   Api:
-    TracingEnabled: True
-
+    EndpointConfiguration: REGIONAL
+    Cors: "'*'"
 Resources:
-  FunctionA:
+  ExampleFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: s3-presigner/
@@ -26,21 +22,99 @@ Resources:
             BucketName:
               !Ref S3Bucket
       Environment:
-        Variables:
-          S3_BUCKET: !Ref S3Bucket
-          S3_KEY: template.yaml
+#        Variables:
+#          S3_BUCKET: !Ref S3Bucket
+#          S3_KEY: template.yaml
       Events:
-        MyGetEvent:
+        MyPostEvent:
           Type: Api
           Properties:
-            Path: /req/str
-            Method: GET
-            RequestParameters:
-#              - method.request.path.str:
-#                  Required: true
-              - method.request.querystring.pathToObj:
-                  Required: true
-                  Caching: false
+            Path: /res
+            Method: POST
+            RestApiId: !Ref ExampleAPIGateway
+        MyPutEvent:
+          Type: Api
+          Properties:
+            Path: /{bucketname}/{objectkey}
+            Method: PUT
+            RestApiId: !Ref ExampleAPIGateway
   S3Bucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+  IAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      RoleName: apiToS3
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "apigateway.amazonaws.com"
+                - "s3.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+  ExampleAPIGateway:
+    Type: AWS::Serverless::Api
+    DependsOn: ExampleFunction
+    Properties:
+      StageName: prod
+      DefinitionBody:
+        swagger: 2.0
+        info:
+          version: 1.0
+          title: Lambda Integration Example
+        basePath: /prod
+        schemes:
+          - https
+        paths:
+          /res:
+            post:
+              parameters:
+                - name: "pathToObj"
+                  in: "query"
+                  required: true
+                  type: "string"
+                - name: "s3Bucket"
+                  in: "query"
+                  required: true
+                  type: "string"
+              responses: {}
+              x-amazon-apigateway-integration:
+                httpMethod: "POST"
+                uri:
+                  Fn::Sub: "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ExampleFunction.Arn}/invocations"
+                passthroughBehavior: "when_no_match"
+                type: "aws_proxy"
+          /{bucketname}/{objectkey}:
+            put:
+              parameters:
+                - name: "objectkey"
+                  in: "path"
+                  required: true
+                  type: "string"
+                - name: "bucketname"
+                  in: "path"
+                  required: true
+                  type: "string"
+              responses:
+                "200":
+                  description: "200 response"
+              x-amazon-apigateway-integration:
+                credentials: !GetAtt IAMRole.Arn
+                httpMethod: "PUT"
+                uri:
+                  Fn::Sub: "arn:aws:apigateway:${AWS::Region}:s3:path/{bucketname}/{objectkey}"
+                responses:
+                  default:
+                    statusCode: "200"
+                requestParameters:
+                  integration.request.path.bucketname: "method.request.path.bucketname"
+                  integration.request.path.objectkey: "method.request.path.objectkey"
+                passthroughBehavior: "when_no_match"
+                type: "aws"
