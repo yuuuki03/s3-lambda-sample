@@ -1,6 +1,6 @@
 # summary
-QueryStringにObjectPathを設定してGETリクエストを送信するとS3の署名付きURLを返却します。
-
+- QueryStringにObjectPathとS3バケットを設定してPOSTリクエストを送信するとS3の署名付きURLを返却します。
+- PUTリクエストでテキストデータをS3に格納します。
 ### 準備
 
 sam build
